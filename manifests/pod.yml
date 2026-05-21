@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flask-pod
+  labels:
+    app: flask
+spec:
+  containers:
+    - name: flask
+      image: tawa123/multi-env-platform:latest
+      ports:
+        - containerPort: 5000
+      env:
+        - name: ENV_NAME
+          value: "local"

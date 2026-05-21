@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-deployment
+spec:
+  replicas: 2          # run 2 copies of the pod
+  selector:
+    matchLabels:
+      app: flask
+  template:            # this is the pod template
+    metadata:
+      labels:
+        app: flask
+    spec:
+      containers:
+        - name: flask
+          image: tawa123/multi-env-platform:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: ENV_NAME
+              value: "local"
