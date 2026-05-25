@@ -1,0 +1,60 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "tawa123/multi-env-platform"
+        IMAGE_TAG  = "latest"
+        PATH       = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build and push Docker image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker buildx build --platform linux/amd64,linux/arm64 \
+                          -t tawa123/multi-env-platform:latest \
+                          --push .
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to EKS production') {
+            steps {
+                withCredentials([file(
+                    credentialsId: 'b6559ce0-f1e2-44fd-83fb-c71a4b2afd36',
+                    variable: 'KUBECONFIG'
+                )]) {
+                    sh '''
+                        export KUBECONFIG=$KUBECONFIG
+                        helm upgrade production ./helm/flask-chart \
+                          --values ./helm/eks-production-values.yaml \
+                          --namespace default
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Production deployment to EKS succeeded"
+        }
+        failure {
+            echo "Production deployment failed - check logs above"
+        }
+    }
+}
