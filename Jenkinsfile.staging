@@ -23,6 +23,7 @@ pipeline {
                 )]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        cd /Users/tawa/Documents/multi-env-platform
                         docker buildx build --platform linux/amd64,linux/arm64 \
                           -t tawa123/multi-env-platform:latest \
                           --push .
