@@ -42,31 +42,52 @@ pipeline {
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_DEFAULT_REGION="us-east-1"
-                        export KUBECONFIG="/tmp/kubeconfig-staging"
 
-                        aws eks update-kubeconfig \
+                        # Get token
+                        TOKEN=$(aws eks get-token \
+                          --cluster-name k8s-platform \
+                          --region us-east-1 \
+                          --query status.token \
+                          --output text)
+
+                        # Get cluster endpoint and CA
+                        ENDPOINT=$(aws eks describe-cluster \
                           --name k8s-platform \
                           --region us-east-1 \
-                          --kubeconfig /tmp/kubeconfig-staging
+                          --query cluster.endpoint \
+                          --output text)
 
-                        TOKEN=$(AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
-                                AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
-                                AWS_DEFAULT_REGION="us-east-1" \
-                                aws eks get-token \
-                                --cluster-name k8s-platform \
-                                --region us-east-1 \
-                                --query status.token \
-                                --output text)
+                        CA=$(aws eks describe-cluster \
+                          --name k8s-platform \
+                          --region us-east-1 \
+                          --query cluster.certificateAuthority.data \
+                          --output text)
 
-                        KUBECONFIG=/tmp/kubeconfig-staging \
-                        kubectl config set-credentials \
-                          arn:aws:eks:us-east-1:759371407233:cluster/k8s-platform \
-                          --token="$TOKEN"
+                        # Write kubeconfig manually with static token
+                        cat > /tmp/kubeconfig-staging << KUBEEOF
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: ${CA}
+    server: ${ENDPOINT}
+  name: k8s-platform
+contexts:
+- context:
+    cluster: k8s-platform
+    user: k8s-platform
+  name: k8s-platform
+current-context: k8s-platform
+users:
+- name: k8s-platform
+  user:
+    token: ${TOKEN}
+KUBEEOF
 
-                        KUBECONFIG=/tmp/kubeconfig-staging \
                         helm upgrade staging ./helm/flask-chart \
                           --values ./helm/eks-staging-values.yaml \
-                          --namespace default
+                          --namespace default \
+                          --kubeconfig /tmp/kubeconfig-staging
                     '''
                 }
             }
