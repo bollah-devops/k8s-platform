@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "tawa123/multi-env-platform"
-        IMAGE_TAG  = "latest"
-        PATH       = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+        PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
     }
 
     stages {
@@ -23,6 +21,7 @@ pipeline {
                 )]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        cd /Users/tawa/Documents/multi-env-platform
                         docker buildx build --platform linux/amd64,linux/arm64 \
                           -t tawa123/multi-env-platform:latest \
                           --push .
@@ -34,17 +33,34 @@ pipeline {
 
         stage('Deploy to EKS production') {
             steps {
-                withCredentials([file(
-                    credentialsId: 'b6559ce0-f1e2-44fd-83fb-c71a4b2afd36',
-                    variable: 'KUBECONFIG'
-                )]) {
-                    sh '''
-                        export KUBECONFIG=$KUBECONFIG
-                        helm upgrade production ./helm/flask-chart \
-                          --values ./helm/eks-production-values.yaml \
-                          --namespace default
-                    '''
-                }
+                sh '''
+                    set -e
+
+                    aws eks describe-cluster \
+                      --name k8s-platform \
+                      --region us-east-1 \
+                      --query cluster.certificateAuthority.data \
+                      --output text | base64 --decode > /tmp/eks-ca.crt
+
+                    TOKEN=$(aws eks get-token \
+                      --cluster-name k8s-platform \
+                      --region us-east-1 \
+                      --query status.token \
+                      --output text)
+
+                    ENDPOINT=$(aws eks describe-cluster \
+                      --name k8s-platform \
+                      --region us-east-1 \
+                      --query cluster.endpoint \
+                      --output text)
+
+                    helm upgrade production ./helm/flask-chart \
+                      --values ./helm/eks-production-values.yaml \
+                      --namespace default \
+                      --kube-token "$TOKEN" \
+                      --kube-apiserver "$ENDPOINT" \
+                      --kube-ca-file /tmp/eks-ca.crt
+                '''
             }
         }
     }
