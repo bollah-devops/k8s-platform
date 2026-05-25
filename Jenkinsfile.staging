@@ -35,12 +35,15 @@ pipeline {
 
         stage('Deploy to EKS staging') {
             steps {
-                withCredentials([file(
-                    credentialsId: 'b6559ce0-f1e2-44fd-83fb-c71a4b2afd36',
-                    variable: 'KUBECONFIG'
-                )]) {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
                     sh '''
-                        export KUBECONFIG=$KUBECONFIG
+                        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                        export AWS_DEFAULT_REGION=us-east-1
+                        aws eks update-kubeconfig --name k8s-platform --region us-east-1
                         helm upgrade staging ./helm/flask-chart \
                           --values ./helm/eks-staging-values.yaml \
                           --namespace default
