@@ -43,30 +43,32 @@ pipeline {
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_DEFAULT_REGION="us-east-1"
 
-                        aws eks update-kubeconfig \
+                        # Write CA to file
+                        aws eks describe-cluster \
                           --name k8s-platform \
                           --region us-east-1 \
-                          --kubeconfig /tmp/kubeconfig-staging
+                          --query cluster.certificateAuthority.data \
+                          --output text | base64 --decode > /tmp/eks-ca.crt
+
+                        # Get token and endpoint
+                        TOKEN=$(aws eks get-token \
+                          --cluster-name k8s-platform \
+                          --region us-east-1 \
+                          --query status.token \
+                          --output text)
+
+                        ENDPOINT=$(aws eks describe-cluster \
+                          --name k8s-platform \
+                          --region us-east-1 \
+                          --query cluster.endpoint \
+                          --output text)
 
                         helm upgrade staging ./helm/flask-chart \
                           --values ./helm/eks-staging-values.yaml \
                           --namespace default \
-                          --kubeconfig /tmp/kubeconfig-staging \
-                          --kube-token $(aws eks get-token \
-                            --cluster-name k8s-platform \
-                            --region us-east-1 \
-                            --query status.token \
-                            --output text) \
-                          --kube-apiserver $(aws eks describe-cluster \
-                            --name k8s-platform \
-                            --region us-east-1 \
-                            --query cluster.endpoint \
-                            --output text) \
-                          --kube-ca-file <(aws eks describe-cluster \
-                            --name k8s-platform \
-                            --region us-east-1 \
-                            --query cluster.certificateAuthority.data \
-                            --output text | base64 --decode)
+                          --kube-token "$TOKEN" \
+                          --kube-apiserver "$ENDPOINT" \
+                          --kube-ca-file /tmp/eks-ca.crt
                     '''
                 }
             }
