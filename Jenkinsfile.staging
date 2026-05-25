@@ -42,11 +42,19 @@ pipeline {
                         export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_DEFAULT_REGION="us-east-1"
-                        export KUBECONFIG="/tmp/kubeconfig-staging"
 
+                        # Generate kubeconfig with embedded token
                         aws eks update-kubeconfig \
                           --name k8s-platform \
                           --region us-east-1 \
+                          --kubeconfig /tmp/kubeconfig-staging
+
+                        # Get token and embed it directly
+                        TOKEN=$(aws eks get-token --cluster-name k8s-platform --region us-east-1 --query 'status.token' --output text)
+
+                        # Replace exec auth with static token
+                        kubectl config set-credentials arn:aws:eks:us-east-1:759371407233:cluster/k8s-platform \
+                          --token="$TOKEN" \
                           --kubeconfig /tmp/kubeconfig-staging
 
                         helm upgrade staging ./helm/flask-chart \
