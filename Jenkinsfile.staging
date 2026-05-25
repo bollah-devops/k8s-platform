@@ -43,51 +43,30 @@ pipeline {
                         export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                         export AWS_DEFAULT_REGION="us-east-1"
 
-                        # Get token
-                        TOKEN=$(aws eks get-token \
-                          --cluster-name k8s-platform \
-                          --region us-east-1 \
-                          --query status.token \
-                          --output text)
-
-                        # Get cluster endpoint and CA
-                        ENDPOINT=$(aws eks describe-cluster \
+                        aws eks update-kubeconfig \
                           --name k8s-platform \
                           --region us-east-1 \
-                          --query cluster.endpoint \
-                          --output text)
-
-                        CA=$(aws eks describe-cluster \
-                          --name k8s-platform \
-                          --region us-east-1 \
-                          --query cluster.certificateAuthority.data \
-                          --output text)
-
-                        # Write kubeconfig manually with static token
-                        cat > /tmp/kubeconfig-staging << KUBEEOF
-apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    certificate-authority-data: ${CA}
-    server: ${ENDPOINT}
-  name: k8s-platform
-contexts:
-- context:
-    cluster: k8s-platform
-    user: k8s-platform
-  name: k8s-platform
-current-context: k8s-platform
-users:
-- name: k8s-platform
-  user:
-    token: ${TOKEN}
-KUBEEOF
+                          --kubeconfig /tmp/kubeconfig-staging
 
                         helm upgrade staging ./helm/flask-chart \
                           --values ./helm/eks-staging-values.yaml \
                           --namespace default \
-                          --kubeconfig /tmp/kubeconfig-staging
+                          --kubeconfig /tmp/kubeconfig-staging \
+                          --kube-token $(aws eks get-token \
+                            --cluster-name k8s-platform \
+                            --region us-east-1 \
+                            --query status.token \
+                            --output text) \
+                          --kube-apiserver $(aws eks describe-cluster \
+                            --name k8s-platform \
+                            --region us-east-1 \
+                            --query cluster.endpoint \
+                            --output text) \
+                          --kube-ca-file <(aws eks describe-cluster \
+                            --name k8s-platform \
+                            --region us-east-1 \
+                            --query cluster.certificateAuthority.data \
+                            --output text | base64 --decode)
                     '''
                 }
             }
